@@ -1,214 +1,214 @@
-# Windows Process Reporter CLI Tool
+# Multi-Platform Process Reporter CLI Tool
 
-A robust PowerShell command-line tool to generate detailed reports of running processes on a Windows system. This utility provides insights into process activity, including Process ID (PID), Name, User, CPU Usage (%), and Memory Usage (MB), with flexible output options.
+A robust command-line tool to generate detailed reports of running processes on both **Windows** and **macOS** systems. This utility provides insights into process activity, including Process ID (PID), Name, User, CPU Usage (%), and Memory Usage (MB), with flexible output options. Ansible playbooks are provided for automated deployment.
 
 [![CI Pipeline](https://github.com/tytulicous/windows-process-reporter/actions/workflows/ci.yml/badge.svg)](https://github.com/tytulicous/windows-process-reporter/actions/workflows/ci.yml)
 
 ## Features
 
+-   **Cross-Platform Support:** Dedicated scripts for Windows and macOS.
 -   **Comprehensive Process Data:** Lists running processes with key metrics: PID, Name, User, CPU%, Memory (MB).
 -   **Flexible Output:** Generates reports in CSV or JSON format.
 -   **File or Console Output:** Save reports to a specified file or display directly in the console.
--   **Portable:** A single PowerShell script (`Get-ProcessReport.ps1`) with no external binary dependencies (requires PowerShell only).
+-   **Portable Scripts:** Single PowerShell scripts (`.ps1`) for each platform, requiring only PowerShell (Windows PowerShell 5.1+ for Windows, PowerShell Core 7+ for macOS).
 -   **User-Friendly:** Clear command-line interface, verbose output options, and helpful error messages.
--   **Automated Testing:** Includes a suite of Pester tests for validating core functionality.
--   **Continuous Integration:** GitHub Actions workflow automatically tests the tool on code changes.
+-   **Automated Testing:** Includes suites of Pester tests for validating core functionality on both platforms.
+-   **Continuous Integration:** GitHub Actions workflow automatically tests both Windows and macOS versions on code changes.
+-   **Ansible Deployment:** Playbooks and example configurations provided for automated deployment to fleets of Windows and macOS machines.
 
-## Prerequisites
+## Project Structure
 
--   **Operating System:** Windows (tested on Windows 10/11, Windows Server 2016+).
--   **PowerShell:** Version 5.1 or higher (standard on modern Windows).
--   **Administrator Privileges (Recommended):** For full access to all process information (especially `User` for system processes and accurate `CPU %`), running the script with Administrator rights is highly recommended. Without elevation, some data might be "N/A" or incomplete.
+The project is organized as follows:
 
-## Installation
+-   `README.md`: This file.
+-   `LICENSE`: Project license.
+-   `.github/workflows/ci.yml`: GitHub Actions CI pipeline configuration.
+-   `scripts/`: Contains the source code for the reporter scripts and their tests.
+    -   `windows/`: Windows-specific script (`Get-ProcessReport.ps1`) and Pester tests (`tests/`).
+    -   `macos/`: macOS-specific script (`Get-MacProcessReport.ps1`) and Pester tests (`tests/`).
+-   `ansible/`: Contains Ansible playbooks and files for deployment.
+    -   `deploy_process_reporters.yml`: Main Ansible playbook for Windows & macOS.
+    -   `inventory.ini.example`: Example Ansible inventory file.
+    -   `files/`: Staging area for scripts to be deployed by Ansible.
+        -   `windows/Get-ProcessReport.ps1`
+        -   `macos/Get-MacProcessReport.ps1`
+    -   `(Optional) promote_scripts_to_ansible.sh` or `Promote-ScriptsToAnsible.ps1`: Helper scripts to copy updated scripts from `scripts/` to `ansible/files/`.
 
-1.  **Download or Clone:**
-    *   **Direct Download:** Download the `Get-ProcessReport.ps1` script. If you intend to run tests locally, also download the `tests` directory and its contents.
-    *   **Git Clone:** For the complete project including tests and CI configuration:
-        ```bash
-        git clone https://github.com/tytulicous/windows-process-reporter.git
-        cd windows-process-reporter
-        ```
+---
 
-2.  **PowerShell Execution Policy:**
-    By default, PowerShell's execution policy might prevent running downloaded scripts. To run `Get-ProcessReport.ps1`:
-    *   **For the current session only (recommended for quick use):**
-        Open PowerShell and run:
-        ```powershell
-        Set-ExecutionPolicy Bypass -Scope Process -Force
-        ```
-    *   **When calling from `cmd.exe` or a scheduler:**
-        ```powershell
-        powershell.exe -ExecutionPolicy Bypass -File "C:\path\to\Get-ProcessReport.ps1" [parameters]
-        ```
-    *   **More permanent changes (requires Administrator privileges):**
-        ```powershell
-        # Allows running local scripts and signed remote scripts
-        Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-        ```
-        *(Understand the security implications before changing execution policies system-wide.)*
+## Windows Version (`scripts/windows/Get-ProcessReport.ps1`)
 
-## Usage
+Generates a report of running processes on a Windows system.
 
-Navigate to the directory containing `Get-ProcessReport.ps1` in a PowerShell terminal (run as Administrator for best results).
+### Prerequisites (Windows)
 
-**Basic Syntax:**
+-   **Operating System:** Windows (Windows 10/11, Windows Server 2016+ recommended).
+-   **PowerShell:** Version 5.1 or higher.
+-   **Administrator Privileges (Recommended):** For full access to all process information.
 
-```powershell
-.\Get-ProcessReport.ps1 [-Format <csv|json>] [-OutputPath <FilePath>] [-Verbose]
-Use code with caution.
-Markdown
-Parameters:
-Parameter	Type	Description	Default	Required
--Format	String	Output format for the report. Valid values: csv, json.	csv	No
--OutputPath	String	Full path to save the report file. If omitted, output is to the console.	Console	No
--Verbose	Switch	Enables detailed operational messages from the script. Useful for debugging.	N/A	No
-Examples:
-Generate a CSV report and display it in the console (default):
-.\Get-ProcessReport.ps1
-Use code with caution.
-Powershell
-Generate a JSON report and display it in the console:
-.\Get-ProcessReport.ps1 -Format json
-Use code with caution.
-Powershell
-Save a CSV report to a specific file:
-.\Get-ProcessReport.ps1 -OutputPath "C:\Reports\ProcessAnalysis.csv"
-Use code with caution.
-Powershell
-(Ensure the directory C:\Reports exists or the script has permissions to create it.)
-Save a JSON report to a file in the current directory with verbose output:
-.\Get-ProcessReport.ps1 -Format json -OutputPath ".\current_processes.json" -Verbose
-Use code with caution.
-Powershell
-Run from any directory (if the script is in your PATH or using its full path):
-C:\Scripts\Get-ProcessReport.ps1 -Format csv
-Use code with caution.
-Powershell
-Output Format Details
-CSV (Comma Separated Values):
-A standard CSV file, easily importable into spreadsheet software.
-Columns: PID, Name, User, CPU_Percent, Memory_MB
-Example:
-"PID","Name","User","CPU_Percent","Memory_MB"
-"4128","chrome","MYLAPTOP\User","12.5","350.22"
-"1024","svchost","NT AUTHORITY\SYSTEM","0.8","65.10"
-Use code with caution.
-Csv
-JSON (JavaScript Object Notation):
-An array of process objects, suitable for programmatic parsing or use with various data tools.
-Example:
-[
-  {
-    "PID": 4128,
-    "Name": "chrome",
-    "User": "MYLAPTOP\\User",
-    "CPU_Percent": 12.5,
-    "Memory_MB": 350.22
-  },
-  {
-    "PID": 1024,
-    "Name": "svchost",
-    "User": "NT AUTHORITY\\SYSTEM",
-    "CPU_Percent": 0.8,
-    "Memory_MB": 65.10
-  }
-]
-Use code with caution.
-Json
-Data Visualization
-The generated CSV or JSON reports can be visualized using various tools:
-1. Spreadsheet Software (Excel, Google Sheets, LibreOffice Calc) - for CSV:
-a. Generate a CSV report: .\Get-ProcessReport.ps1 -OutputPath "processes.csv"
-b. Open processes.csv in your preferred spreadsheet application.
-c. Example: Charting Total Processes Per User:
-1. Create a PivotTable (Excel: Insert > PivotTable, Google Sheets: Data > Pivot table).
-2. Set User as Rows.
-3. Set PID (or Name) as Values, summarized by Count.
-4. Insert a Bar Chart or Pie Chart based on the PivotTable data.
-2. Programming Languages (e.g., Python with Pandas & Matplotlib) - for CSV/JSON:
-This allows for more custom and advanced visualizations.
-a. Generate the report: .\Get-ProcessReport.ps1 -Format json -OutputPath "processes.json"
-b. Example Python script:
-```python
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns # Optional, for nicer plots
-# Load data (adjust for CSV if needed: pd.read_csv("processes.csv"))
-  df = pd.read_json("processes.json")
+### Usage (Windows)
 
-  # Set a style (optional)
-  sns.set_style("whitegrid")
+1.  Open PowerShell (run as Administrator for best results).
+2.  Navigate to the `scripts/windows/` directory.
+3.  Execute:
+    ```powershell
+    .\Get-ProcessReport.ps1 [-Format <csv|json>] [-OutputPath <FilePath>] [-Verbose]
+    ```
 
-  # Top 10 processes by Memory Usage
-  top_memory = df.nlargest(10, 'Memory_MB')
-  plt.figure(figsize=(10, 6))
-  sns.barplot(x='Memory_MB', y='Name', data=top_memory, palette="viridis")
-  plt.title('Top 10 Processes by Memory Usage (MB)')
-  plt.xlabel('Memory Usage (MB)')
-  plt.ylabel('Process Name')
-  plt.tight_layout()
-  plt.show()
+**Examples (Windows):**
 
-  # CPU Usage Distribution (Histogram)
-  plt.figure(figsize=(10, 6))
-  sns.histplot(df['CPU_Percent'], kde=True, bins=20, color="skyblue")
-  plt.title('Distribution of CPU Usage (%)')
-  plt.xlabel('CPU Usage (%)')
-  plt.ylabel('Number of Processes')
-  plt.tight_layout()
-  plt.show()
-  ```
+-   CSV to console: `.\Get-ProcessReport.ps1`
+-   JSON to file: `.\Get-ProcessReport.ps1 -Format json -OutputPath "C:\Reports\WinProcesses.json"`
+
+*(Refer to the script's internal help for more details: `Get-Help .\Get-ProcessReport.ps1 -Full`)*
+
+---
+
+## macOS Version (`scripts/macos/Get-MacProcessReport.ps1`)
+
+Generates a report of running processes on a macOS system using the native `ps` command.
+
+### Prerequisites (macOS)
+
+-   **Operating System:** macOS.
+-   **PowerShell Core (`pwsh`):** Version 7.x or higher.
+    -   Install: [Installing PowerShell on macOS](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-macos)
+-   **Permissions:** For full process visibility, running with `sudo` might be necessary (e.g., `sudo pwsh ./Get-MacProcessReport.ps1`).
+
+### Usage (macOS)
+
+1.  Open your terminal (e.g., Terminal.app, iTerm2).
+2.  Navigate to the `scripts/macos/` directory.
+3.  Execute using `pwsh`:
+    ```powershell
+    pwsh ./Get-MacProcessReport.ps1 [-Format <csv|json>] [-OutputPath <FilePath>] [-Verbose]
+    ```
+
+**Examples (macOS):**
+
+-   CSV to console: `pwsh ./Get-MacProcessReport.ps1`
+-   JSON to file: `pwsh ./Get-MacProcessReport.ps1 -Format json -OutputPath "/Users/youruser/Documents/MacProcesses.json"`
+
+*(Refer to the script's internal help: `Get-Help ./Get-MacProcessReport.ps1 -Full` inside a `pwsh` session)*
+
+---
+
 ## Automated Tests (Pester)
 
-This project includes a suite of automated tests written using the Pester framework to ensure the reliability and correctness of `Get-ProcessReport.ps1`.
+Both Windows and macOS versions include Pester test suites to ensure reliability.
 
 **Running Tests Locally:**
 
-1.  **Ensure Pester is Installed:** Pester is typically bundled with modern PowerShell, but to install/update (tests are compatible with Pester 5+):
+1.  **Ensure Pester is Installed:**
+    For Windows PowerShell:
     ```powershell
     Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
     Import-Module Pester
     ```
-
-2.  **Navigate to the Project Root:** Open PowerShell in the directory where you cloned or downloaded the project.
-
-3.  **Execute Pester:**
+    For PowerShell Core (`pwsh`) on macOS (or Windows/Linux):
     ```powershell
-    Invoke-Pester -Path ./tests
+    pwsh -Command "Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser; Import-Module Pester"
     ```
-    For more detailed output:
-    ```powershell
-    Invoke-Pester -Path ./tests -Output Detailed
+2.  **Navigate to the Project Root** (`ProcessReporter/`).
+3.  **Execute Pester for the desired platform:**
+    -   **Windows Tests:**
+        ```powershell
+        Invoke-Pester -Path ./scripts/windows/tests
+        ```
+    -   **macOS Tests (using `pwsh`):**
+        ```powershell
+        pwsh -Command "Invoke-Pester -Path ./scripts/macos/tests"
+        ```
+    For more detailed output, add `-Output Detailed` to the `Invoke-Pester` command.
+
+---
+
+## Ansible Deployment
+
+This project includes Ansible playbooks for automated deployment of the Process Reporter scripts to fleets of Windows and macOS machines. The Ansible artifacts are located in the `ansible/` directory.
+
+### Prerequisites for Ansible Deployment
+
+-   **Ansible Control Node:** A Linux machine with Ansible installed.
+-   **Target Hosts:**
+    -   **Windows:** Configured for WinRM. The `ansible_user` must have administrative privileges.
+    -   **macOS:** Configured for SSH (key-based authentication recommended). PowerShell Core (`pwsh`) must be installed. The `ansible_user` should have `sudo` capabilities if elevated privileges are needed for script execution or directory creation (e.g., for `become: yes` in the playbook).
+-   **Inventory File:** Create an `inventory.ini` file within the `ansible/` directory (or point to your existing inventory) based on `ansible/inventory.ini.example`. **Do not commit your actual inventory with sensitive credentials to Git.** Use Ansible Vault for secrets.
+-   **Deployment Scripts:** The scripts that Ansible deploys are expected to be in `ansible/files/windows/` and `ansible/files/macos/`.
+
+### Staging Scripts for Ansible Deployment
+
+The Ansible playbook deploys scripts from the `ansible/files/` directory. The source scripts are developed and tested in the `scripts/` directory. To update the scripts Ansible deploys:
+
+1.  Modify and test your scripts in `scripts/windows/` or `scripts/macos/`.
+2.  Commit changes to the source scripts.
+3.  **Copy the updated script(s) from `scripts/...` to the corresponding `ansible/files/...` location.**
+    -   Example: `cp ./scripts/windows/Get-ProcessReport.ps1 ./ansible/files/windows/`
+    -   Helper scripts (`promote_scripts_to_ansible.sh` or `Promote-ScriptsToAnsible.ps1`) might be provided in the `ansible/` directory or project root for convenience.
+4.  Stage and commit these updated deployment files in `ansible/files/` to your Git repository.
+
+### Running the Ansible Playbook
+
+1.  Navigate to the `ansible/` directory on your Ansible control node (or ensure your `ansible.cfg` is set up).
+2.  Execute the playbook:
+    ```bash
+    ansible-playbook deploy_process_reporters.yml -i inventory.ini
+    ```
+    If using Ansible Vault for encrypted variables (recommended for passwords):
+    ```bash
+    ansible-playbook deploy_process_reporters.yml -i inventory.ini --ask-vault-pass
     ```
 
-The tests reside in the `./tests` directory and utilize mocking for system cmdlets (`Get-Process`, `Get-WmiObject`) to provide consistent and isolated test environments. They cover core functionalities like output generation, file saving, and edge case handling.
+The playbook will:
+-   Connect to hosts defined in your inventory.
+-   Create necessary directories on target machines.
+-   Copy the appropriate platform-specific script from `ansible/files/` to the target.
+-   Execute the script on the target.
+-   Fetch the generated report (CSV by default) back to a `collected_reports/[hostname]/` directory on the Ansible control node.
+
+Refer to `ansible/deploy_process_reporters.yml` and `ansible/inventory.ini.example` for detailed configuration.
+
+---
+
+## Output Formats & Visualization
+
+Both scripts support CSV and JSON output formats. These can be visualized using:
+-   Spreadsheet software (Excel, Google Sheets, LibreOffice Calc) for CSV.
+-   Programming languages (e.g., Python with Pandas & Matplotlib) for CSV/JSON.
+*(See earlier sections in this README for more detailed visualization examples, adapting paths as needed.)*
 
 ## Troubleshooting
 
--   **"Script cannot be loaded because running scripts is disabled..."**: Refer to the [Execution Policy](#powershell-execution-policy) section.
--   **`User` field shows "N/A" or errors for many processes**: Run the script with Administrator privileges.
--   **`CPU_Percent` is 0 or inaccurate**: This can be due to permissions (run as Admin) or issues with Windows Performance Counters. The WMI class `Win32_PerfFormattedData_PerfProc_Process` is used.
--   **"Failed to save report to..."**: Verify the output directory exists and you have write permissions. The script attempts to create the parent directory.
--   **Pester Test Failures**: Check the detailed error output from `Invoke-Pester`. Ensure mocks are correctly defined or that script changes haven't invalidated test assumptions.
+-   **Script Execution Issues (Windows/macOS):**
+    -   Ensure correct PowerShell version is installed.
+    -   Check PowerShell Execution Policy (Windows).
+    -   Run with Administrator/`sudo` privileges for complete data.
+    -   Verify script paths and output paths.
+-   **Pester Test Failures:** Examine `Invoke-Pester` output. Ensure mocks are correct and test assumptions align with script logic.
+-   **Ansible Deployment Issues:**
+    -   Verify WinRM/SSH connectivity to targets.
+    -   Check `ansible_user` permissions on targets.
+    -   Ensure `pwsh` is in PATH on macOS targets for Ansible modules and script execution.
+    -   Consult Ansible playbook output for detailed error messages.
 
 ## Continuous Integration (CI)
 
-This repository uses GitHub Actions for Continuous Integration. The workflow is defined in `.github/workflows/ci.yml`. On every push or pull request to the main branches, the CI pipeline automatically:
-1.  Checks out the latest code.
-2.  Sets up a Windows environment with PowerShell.
-3.  Installs the Pester testing framework.
-4.  **Executes the Pester automated tests.**
-
-This ensures that new changes maintain the tool's functionality and don't introduce regressions. You can view the status of these checks via the "Actions" tab on the GitHub repository page.
+This repository uses GitHub Actions for CI (see `.github/workflows/ci.yml`). The pipeline automatically:
+1.  Checks out code.
+2.  Sets up Windows and macOS environments with appropriate PowerShell versions.
+3.  Installs Pester.
+4.  **Executes Pester tests for both Windows and macOS scripts** from their respective `scripts/[platform]/tests` directories.
 
 ## Contributing
 
-Contributions, issues, and feature requests are welcome! Please feel free to:
--   Open an issue to report bugs or suggest enhancements.
--   Fork the repository and submit a pull request with your changes.
-    (Please ensure Pester tests pass with your contributions.)
+Contributions, issues, and feature requests are welcome!
+1.  Fork the repository.
+2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4.  Ensure all Pester tests pass for both platforms.
+5.  Push to the branch (`git push origin feature/AmazingFeature`).
+6.  Open a Pull Request.
 
 ## License
 
-This project is open-source under the MIT License.
+Distributed under the MIT License. See `LICENSE` file for more information.
