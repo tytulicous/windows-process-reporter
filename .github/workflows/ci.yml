@@ -2,48 +2,65 @@ name: Process Reporter CI
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop ] # Adjusted branches
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop ] # Adjusted branches
 
 jobs:
-  test-script:
+  test-windows:
+    name: Test on Windows
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./windows
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Set Windows Execution Policy
+      run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+      shell: pwsh
+    - name: Install Pester (Windows)
+      run: |
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+        Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser -Confirm:$false
+        Import-Module Pester -ErrorAction SilentlyContinue
+      shell: pwsh
+    - name: Run Pester Tests (Windows)
+      run: Invoke-Pester -Path ./tests -PassThru
+      shell: pwsh
 
+  # --- ADD THE NEW MACOS JOB HERE ---
+  test-macos:
+    name: Test on macOS
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ./macos
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set Execution Policy
-      run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-      shell: pwsh
+    - name: Setup PowerShell Core (pwsh) on macOS
+      uses: actions/setup-powershell@v1
+      with:
+        version: '7.x'
 
-    - name: Run Get-ProcessReport.ps1 (basic execution check - CSV to console)
-      run: ./Get-ProcessReport.ps1 -Verbose
-      shell: pwsh
-      # This step is somewhat redundant if Pester tests cover console output,
-      # but can be a quick sanity check before running full tests.
+    - name: Display PowerShell version (macOS)
+      run: pwsh -Command "$PSVersionTable"
+      shell: bash
 
-    - name: Install Pester
+    - name: Install Pester module (macOS)
       run: |
-        Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser
-        Import-Module Pester # Removed -RequiredVersion
-      shell: pwsh
+        pwsh -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted"
+        pwsh -Command "Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser -Confirm:$false"
+        pwsh -Command "Import-Module Pester -ErrorAction SilentlyContinue"
+      shell: bash
 
-    - name: Run Pester Tests
-      run: Invoke-Pester -Path ./tests -PassThru
-      shell: pwsh
+    - name: Display Pester version (macOS)
+      run: pwsh -Command "(Get-Module Pester -ListAvailable | Select-Object -First 1).Version.ToString()"
+      shell: bash
+      continue-on-error: true
 
-    # The individual file creation checks can be removed if Pester tests cover them sufficiently
-    # Or kept as an additional layer. For this example, Pester covers file creation.
-    # - name: Run Get-ProcessReport.ps1 (CSV to file check)
-    #   run: |
-    #     ./Get-ProcessReport.ps1 -OutputPath ".\output.csv" -Verbose
-    #     # ... (rest of the checks from original CI)
-    #   shell: pwsh
-
-    # - name: Run Get-ProcessReport.ps1 (JSON to file check)
-    #   run: |
-    #     ./Get-ProcessReport.ps1 -Format json -OutputPath ".\output.json" -Verbose
-    #     # ... (rest of the checks from original CI)
-    #   shell: pwsh
+    - name: Run Pester Tests (macOS)
+      run: pwsh -Command "Invoke-Pester -Path ./tests -PassThru"
+      shell: bash
