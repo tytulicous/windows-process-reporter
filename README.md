@@ -26,10 +26,9 @@ A robust PowerShell command-line tool to generate detailed reports of running pr
     *   **Direct Download:** Download the `Get-ProcessReport.ps1` script. If you intend to run tests locally, also download the `tests` directory and its contents.
     *   **Git Clone:** For the complete project including tests and CI configuration:
         ```bash
-        git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git
-        cd YOUR_REPOSITORY_NAME
+        git clone https://github.com/tytulicous/windows-process-reporter.git
+        cd windows-process-reporter
         ```
-        *(Replace `YOUR_USERNAME` and `YOUR_REPOSITORY_NAME`)*
 
 2.  **PowerShell Execution Policy:**
     By default, PowerShell's execution policy might prevent running downloaded scripts. To run `Get-ProcessReport.ps1`:
