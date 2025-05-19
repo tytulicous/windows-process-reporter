@@ -1,0 +1,22 @@
+# PowerShell specific
+*.ps1xml
+*.psd1
+*.psm1 # If you had module files you didn't want to commit directly for some reason
+# User-specific files
+*.user
+*.suo
+# Build artifacts / Temp files
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.nupkg
+*.zip
+*.tar.gz
+# Pester test output (if generated locally outside temp)
+TestResults/
+# OS generated files
+.DS_Store
+Thumbs.db
+# Temporary files from tests (though our tests use $env:TEMP)
+/ProcessReporterTests/ # If you created a local temp dir not under $env:TEMP

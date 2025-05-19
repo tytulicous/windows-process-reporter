@@ -1,0 +1,14 @@
+# Auto detect text files and ensure they have LF line endings on checkout
+* text=auto eol=lf
+
+# Explicitly declare files that should always have LF line endings
+*.ps1 text eol=lf
+*.ps1xml text eol=lf
+*.psd1 text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.csv text eol=lf
+*.gitignore text eol=lf
+*.gitattributes text eol=lf

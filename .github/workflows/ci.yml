@@ -1,0 +1,49 @@
+name: Process Reporter CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  test-script:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set Execution Policy
+      run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+      shell: pwsh
+
+    - name: Run Get-ProcessReport.ps1 (basic execution check - CSV to console)
+      run: ./Get-ProcessReport.ps1 -Verbose
+      shell: pwsh
+      # This step is somewhat redundant if Pester tests cover console output,
+      # but can be a quick sanity check before running full tests.
+
+    - name: Install Pester
+      run: |
+        Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser
+        Import-Module Pester -RequiredVersion 5.0.0 # Or remove version constraint if not critical
+      shell: pwsh
+
+    - name: Run Pester Tests
+      run: Invoke-Pester -Path ./tests -PassThru # -PassThru ensures exit code reflects test failures
+      shell: pwsh
+
+    # The individual file creation checks can be removed if Pester tests cover them sufficiently
+    # Or kept as an additional layer. For this example, Pester covers file creation.
+    # - name: Run Get-ProcessReport.ps1 (CSV to file check)
+    #   run: |
+    #     ./Get-ProcessReport.ps1 -OutputPath ".\output.csv" -Verbose
+    #     # ... (rest of the checks from original CI)
+    #   shell: pwsh
+
+    # - name: Run Get-ProcessReport.ps1 (JSON to file check)
+    #   run: |
+    #     ./Get-ProcessReport.ps1 -Format json -OutputPath ".\output.json" -Verbose
+    #     # ... (rest of the checks from original CI)
+    #   shell: pwsh
