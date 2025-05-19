@@ -159,41 +159,56 @@ import seaborn as sns # Optional, for nicer plots
   plt.tight_layout()
   plt.show()
   ```
-Automated Tests (Pester)
-This project includes a suite of automated tests written using the Pester framework to ensure the reliability and correctness of Get-ProcessReport.ps1.
-Running Tests Locally:
-Ensure Pester is Installed: Pester is typically bundled with modern PowerShell, but to install/update (tests are compatible with Pester 5+):
-Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
-Import-Module Pester
-Use code with caution.
-Powershell
-Navigate to the Project Root: Open PowerShell in the directory where you cloned or downloaded the project.
-Execute Pester:
-Invoke-Pester -Path ./tests
-Use code with caution.
-Powershell
-For more detailed output:
-Invoke-Pester -Path ./tests -Output Detailed
-Use code with caution.
-Powershell
-The tests reside in the ./tests directory and utilize mocking for system cmdlets (Get-Process, Get-WmiObject) to provide consistent and isolated test environments. They cover core functionalities like output generation, file saving, and edge case handling.
-Troubleshooting
-"Script cannot be loaded because running scripts is disabled...": Refer to the Execution Policy section.
-User field shows "N/A" or errors for many processes: Run the script with Administrator privileges.
-CPU_Percent is 0 or inaccurate: This can be due to permissions (run as Admin) or issues with Windows Performance Counters. The WMI class Win32_PerfFormattedData_PerfProc_Process is used.
-"Failed to save report to...": Verify the output directory exists and you have write permissions. The script attempts to create the parent directory.
-Pester Test Failures: Check the detailed error output from Invoke-Pester. Ensure mocks are correctly defined or that script changes haven't invalidated test assumptions.
-Continuous Integration (CI)
-This repository uses GitHub Actions for Continuous Integration. The workflow is defined in .github/workflows/ci.yml. On every push or pull request to the main branches, the CI pipeline automatically:
-Checks out the latest code.
-Sets up a Windows environment with PowerShell.
-Installs the Pester testing framework.
-Executes the Pester automated tests.
+## Automated Tests (Pester)
+
+This project includes a suite of automated tests written using the Pester framework to ensure the reliability and correctness of `Get-ProcessReport.ps1`.
+
+**Running Tests Locally:**
+
+1.  **Ensure Pester is Installed:** Pester is typically bundled with modern PowerShell, but to install/update (tests are compatible with Pester 5+):
+    ```powershell
+    Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
+    Import-Module Pester
+    ```
+
+2.  **Navigate to the Project Root:** Open PowerShell in the directory where you cloned or downloaded the project.
+
+3.  **Execute Pester:**
+    ```powershell
+    Invoke-Pester -Path ./tests
+    ```
+    For more detailed output:
+    ```powershell
+    Invoke-Pester -Path ./tests -Output Detailed
+    ```
+
+The tests reside in the `./tests` directory and utilize mocking for system cmdlets (`Get-Process`, `Get-WmiObject`) to provide consistent and isolated test environments. They cover core functionalities like output generation, file saving, and edge case handling.
+
+## Troubleshooting
+
+-   **"Script cannot be loaded because running scripts is disabled..."**: Refer to the [Execution Policy](#powershell-execution-policy) section.
+-   **`User` field shows "N/A" or errors for many processes**: Run the script with Administrator privileges.
+-   **`CPU_Percent` is 0 or inaccurate**: This can be due to permissions (run as Admin) or issues with Windows Performance Counters. The WMI class `Win32_PerfFormattedData_PerfProc_Process` is used.
+-   **"Failed to save report to..."**: Verify the output directory exists and you have write permissions. The script attempts to create the parent directory.
+-   **Pester Test Failures**: Check the detailed error output from `Invoke-Pester`. Ensure mocks are correctly defined or that script changes haven't invalidated test assumptions.
+
+## Continuous Integration (CI)
+
+This repository uses GitHub Actions for Continuous Integration. The workflow is defined in `.github/workflows/ci.yml`. On every push or pull request to the main branches, the CI pipeline automatically:
+1.  Checks out the latest code.
+2.  Sets up a Windows environment with PowerShell.
+3.  Installs the Pester testing framework.
+4.  **Executes the Pester automated tests.**
+
 This ensures that new changes maintain the tool's functionality and don't introduce regressions. You can view the status of these checks via the "Actions" tab on the GitHub repository page.
-Contributing
+
+## Contributing
+
 Contributions, issues, and feature requests are welcome! Please feel free to:
-Open an issue to report bugs or suggest enhancements.
-Fork the repository and submit a pull request with your changes.
-(Please ensure Pester tests pass with your contributions.)
-License
-This project is open-source. MIT License
+-   Open an issue to report bugs or suggest enhancements.
+-   Fork the repository and submit a pull request with your changes.
+    (Please ensure Pester tests pass with your contributions.)
+
+## License
+
+This project is open-source under the MIT License.
