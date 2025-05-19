@@ -27,11 +27,11 @@ jobs:
     - name: Install Pester
       run: |
         Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser
-        Import-Module Pester -RequiredVersion 5.0.0 # Or remove version constraint if not critical
+        Import-Module Pester # Removed -RequiredVersion
       shell: pwsh
 
     - name: Run Pester Tests
-      run: Invoke-Pester -Path ./tests -PassThru # -PassThru ensures exit code reflects test failures
+      run: Invoke-Pester -Path ./tests -PassThru
       shell: pwsh
 
     # The individual file creation checks can be removed if Pester tests cover them sufficiently
