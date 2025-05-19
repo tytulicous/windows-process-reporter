@@ -160,7 +160,6 @@ import seaborn as sns # Optional, for nicer plots
   plt.tight_layout()
   plt.show()
   ```
-Use code with caution.
 Automated Tests (Pester)
 This project includes a suite of automated tests written using the Pester framework to ensure the reliability and correctness of Get-ProcessReport.ps1.
 Running Tests Locally:
