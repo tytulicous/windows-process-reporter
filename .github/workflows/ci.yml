@@ -38,7 +38,7 @@ jobs:
         working-directory: ./macos
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v1.3.0
 
     - name: Setup PowerShell Core (pwsh) on macOS
       uses: actions/setup-powershell@v1
