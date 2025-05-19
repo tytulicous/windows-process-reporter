@@ -1,0 +1,46 @@
+# ansible/inventory.ini.example
+# This is an example inventory file.
+# Rename this to 'inventory.ini' (or use -i path/to/your/inventory.ini) and fill in your actual host details.
+# For sensitive information like passwords, use Ansible Vault:
+# ansible-vault encrypt_string 'YourPassword' --name 'vault_win_password'
+# ansible-vault encrypt_string 'YourSudoPassword' --name 'vault_mac_sudo_password'
+
+[windows_hosts]
+# Add your Windows hosts here. One per line.
+# Example:
+# winserver1.example.com ansible_user=WinAdmin ansible_password={{ vault_win_password }}
+# 192.168.1.50 ansible_user=AnotherWinAdmin ansible_password={{ vault_win_password }}
+
+[macos_hosts]
+# Add your macOS hosts here. One per line.
+# Example:
+# macclient1.example.com ansible_user=macuser ansible_ssh_private_key_file=~/.ssh/id_rsa_mac ansible_become_password={{ vault_mac_sudo_password }}
+# 192.168.1.60 ansible_user=anothermacuser ansible_ssh_pass={{ vault_mac_ssh_password }} ansible_become_password={{ vault_mac_sudo_password }}
+
+# Group variables for Windows hosts
+[windows_hosts:vars]
+ansible_connection=winrm
+ansible_winrm_transport=ntlm  # or kerberos, credssp
+# For development/testing with self-signed certs on WinRM.
+# For production, use valid certificates and set to 'validate'.
+ansible_winrm_server_cert_validation=ignore
+
+# Group variables for macOS hosts
+[macos_hosts:vars]
+ansible_connection=ssh
+# Specify the Python interpreter if the default isn't suitable for Ansible modules on macOS.
+# Python 3 is generally required.
+# ansible_python_interpreter=/usr/bin/python3
+# or
+# ansible_python_interpreter=/usr/local/bin/python3
+
+# Example of how to define vaulted variables if you were to put them here (not recommended for direct inventory)
+# Instead, you'd typically load these from group_vars/all/vault.yml or similar.
+# vault_win_password: !vault |
+#           $ANSIBLE_VAULT;1.1;AES256
+#           3963393630303233613162333034353132613831633162633030613232303063
+#           ... rest of vaulted string ...
+# vault_mac_sudo_password: !vault |
+#           ...
+# vault_mac_ssh_password: !vault |
+#           ...

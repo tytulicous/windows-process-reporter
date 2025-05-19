@@ -1,0 +1,147 @@
+# ansible/deploy_process_reporters.yml
+---
+- name: Deploy and Run Process Reporters (Windows & macOS)
+  hosts: windows_hosts, macos_hosts
+  gather_facts: yes # Needed for ansible_os_family and ansible_date_time
+
+  vars:
+    # --- Common Variables ---
+    report_output_subdir_name: 'Reports'
+    local_report_collection_base_dir: "collected_reports" # On Ansible control node
+
+    # --- Windows Specific Variables ---
+    win_script_name: Get-ProcessReport.ps1
+    # 'src' path for win_copy is relative to the playbook's directory OR a 'files' subdir next to it.
+    # Since this playbook is in 'ansible/', and we have 'ansible/files/', this is correct.
+    win_script_source_path: "files/windows/{{ win_script_name }}"
+    win_remote_base_dir: 'C:\ProgramData\ProcessReporter' # On Windows target
+    win_remote_script_path: "{{ win_remote_base_dir }}\\{{ win_script_name }}"
+    win_remote_report_dir: "{{ win_remote_base_dir }}\\{{ report_output_subdir_name }}"
+    win_report_filename: "ProcessReport_Win_{{ inventory_hostname_short }}_{{ ansible_date_time.iso8601_basic_short }}.csv"
+    win_script_execution_args: "-Format csv -OutputPath \"{{ win_remote_report_dir }}\\{{ win_report_filename }}\" -Verbose" # Quoted OutputPath
+
+    # --- macOS Specific Variables ---
+    mac_script_name: Get-MacProcessReport.ps1
+    mac_script_source_path: "files/macos/{{ mac_script_name }}" # Relative to playbook in 'ansible/'
+    mac_remote_base_dir: '/usr/local/etc/ProcessReporter' # On macOS target
+    mac_remote_script_path: "{{ mac_remote_base_dir }}/{{ mac_script_name }}"
+    mac_remote_report_dir: "{{ mac_remote_base_dir }}/{{ report_output_subdir_name }}"
+    mac_report_filename: "ProcessReport_Mac_{{ inventory_hostname_short }}_{{ ansible_date_time.iso8601_basic_short }}.csv"
+    mac_script_execution_args: "-Format csv -OutputPath '{{ mac_remote_report_dir }}/{{ mac_report_filename }}' -Verbose" # Quoted OutputPath
+
+  tasks:
+    # ==========================
+    # WINDOWS TARGETS
+    # ==========================
+    - name: Windows Tasks
+      block:
+        - name: (Windows) Ensure remote base directory exists
+          ansible.windows.win_file:
+            path: "{{ win_remote_base_dir }}"
+            state: directory
+
+        - name: (Windows) Ensure remote report output directory exists
+          ansible.windows.win_file:
+            path: "{{ win_remote_report_dir }}"
+            state: directory
+
+        - name: (Windows) Copy Process Reporter script to target
+          ansible.windows.win_copy:
+            src: "{{ win_script_source_path }}" # Will look for 'ansible/files/windows/Get-ProcessReport.ps1'
+            dest: "{{ win_remote_script_path }}"
+
+        - name: (Windows) Run the Process Reporter script
+          ansible.windows.win_powershell:
+            script: |
+              Write-Host "Executing (Windows): {{ win_remote_script_path }} {{ win_script_execution_args }}"
+              try {
+                  # Ensure arguments with spaces are handled correctly by PowerShell
+                  $FullCommand = "& '{{ win_remote_script_path }}' {{ win_script_execution_args }}"
+                  Invoke-Expression -Command "powershell.exe -ExecutionPolicy Bypass -Command $FullCommand"
+                  Write-Host "Windows script execution completed."
+              }
+              catch {
+                  Write-Error "Failed to execute Windows Process Reporter script. Error: $($_.Exception.Message)"
+                  exit 1
+              }
+            error_action: Stop
+          register: win_script_execution_result
+
+        - name: (Windows) Create local directory for collecting reports
+          ansible.builtin.file:
+            path: "{{ local_report_collection_base_dir }}/{{ inventory_hostname_short }}"
+            state: directory
+            mode: '0755'
+          delegate_to: localhost
+          run_once: yes # Create once per inventory_hostname_short on the controller
+
+        - name: (Windows) Fetch the generated report
+          ansible.windows.win_fetch:
+            src: "{{ win_remote_report_dir }}/{{ win_report_filename }}"
+            dest: "{{ local_report_collection_base_dir }}/{{ inventory_hostname_short }}/"
+            flat: yes
+          when: win_script_execution_result.rc == 0 and win_script_execution_result.failed == false
+
+        - name: (Windows) Notify report collection
+          ansible.builtin.debug:
+            msg: "Windows report for {{ inventory_hostname_short }} collected to {{ local_report_collection_base_dir }}/{{ inventory_hostname_short }}/{{ win_report_filename }}"
+          when: win_script_execution_result.rc == 0 and win_script_execution_result.failed == false
+
+      when: ansible_os_family == "Windows"
+
+    # ==========================
+    # MACOS TARGETS
+    # ==========================
+    - name: macOS Tasks
+      block:
+        - name: (macOS) Ensure remote base directory exists
+          ansible.builtin.file:
+            path: "{{ mac_remote_base_dir }}"
+            state: directory
+            mode: '0755'
+          become: yes # Use sudo if needed. Ensure ansible_user has passwordless sudo.
+
+        - name: (macOS) Ensure remote report output directory exists
+          ansible.builtin.file:
+            path: "{{ mac_remote_report_dir }}"
+            state: directory
+            mode: '0775' # Or '0755' - ensure script user can write
+          become: yes
+
+        - name: (macOS) Copy Process Reporter script to target
+          ansible.builtin.copy:
+            src: "{{ mac_script_source_path }}" # Will look for 'ansible/files/macos/Get-MacProcessReport.ps1'
+            dest: "{{ mac_remote_script_path }}"
+            mode: '0755' # Make executable
+
+        - name: (macOS) Run the Process Reporter script
+          ansible.builtin.command:
+            cmd: "pwsh -NoProfile -File '{{ mac_remote_script_path }}' {{ mac_script_execution_args }}"
+            # Using -File is generally safer for script execution with arguments
+          register: mac_script_execution_result
+          failed_when: mac_script_execution_result.rc != 0
+          changed_when: true # Assume running the script always makes a "change" for reporting
+          # If the script needs sudo for 'ps' command:
+          # become: yes
+
+        - name: (macOS) Create local directory for collecting reports
+          ansible.builtin.file:
+            path: "{{ local_report_collection_base_dir }}/{{ inventory_hostname_short }}"
+            state: directory
+            mode: '0755'
+          delegate_to: localhost
+          run_once: yes
+
+        - name: (macOS) Fetch the generated report
+          ansible.builtin.fetch:
+            src: "{{ mac_remote_report_dir }}/{{ mac_report_filename }}"
+            dest: "{{ local_report_collection_base_dir }}/{{ inventory_hostname_short }}/"
+            flat: yes
+          when: mac_script_execution_result.rc == 0 and mac_script_execution_result.failed == false
+
+        - name: (macOS) Notify report collection
+          ansible.builtin.debug:
+            msg: "macOS report for {{ inventory_hostname_short }} collected to {{ local_report_collection_base_dir }}/{{ inventory_hostname_short }}/{{ mac_report_filename }}"
+          when: mac_script_execution_result.rc == 0 and mac_script_execution_result.failed == false
+
+      when: ansible_os_family == "Darwin"
