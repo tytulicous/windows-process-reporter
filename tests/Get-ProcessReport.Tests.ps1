@@ -2,49 +2,29 @@
 
 Describe "Get-ProcessReport.ps1" -Tags 'ProcessReport' {
 
-    # $script:SharedData will be created and populated by BeforeAll
-    # No need to pre-define it here if BeforeAll always runs first and creates it.
-    # However, to avoid potential 'variable not found' if an It block somehow runs before BeforeAll (not Pester's design),
-    # you could initialize it to $null or an empty hashtable here, though it's usually not necessary.
-    # $script:SharedData = $null
+    $script:SharedData = $null # Will be initialized in BeforeAll
 
     BeforeAll {
-        # Initialize $script:SharedData as a new hashtable INSIDE BeforeAll
         $script:SharedData = @{
             ScriptPathToTest = $null
             TempDir          = $null
         }
-
+        # ... (rest of BeforeAll as before, setting $script:SharedData.ScriptPathToTest and $script:SharedData.TempDir)
         $RelativePathToScript = "..\Get-ProcessReport.ps1"
         $ScriptFile = $null
         try {
             $ScriptFile = (Resolve-Path (Join-Path $PSScriptRoot $RelativePathToScript) -ErrorAction Stop).Path
-        }
-        catch {
-            Write-Error "FATAL in BeforeAll: Could not resolve script path. PSScriptRoot: '$PSScriptRoot', Relative: '$RelativePathToScript'. Error: $($_.Exception.Message)"
-            throw
-        }
-
-        if (-not (Test-Path $ScriptFile -PathType Leaf)) {
-            Write-Error "FATAL in BeforeAll: Resolved script path '$ScriptFile' does not exist or is not a file."
-            throw
-        }
-
-        # Now assign to the property of the $script:SharedData hashtable
+        } catch { Write-Error "FATAL ..."; throw }
+        if (-not (Test-Path $ScriptFile -PathType Leaf)) { Write-Error "FATAL ..."; throw }
         $script:SharedData.ScriptPathToTest = $ScriptFile
         Write-Host "BeforeAll: Set script:SharedData.ScriptPathToTest to '$($script:SharedData.ScriptPathToTest)'"
-
         $script:SharedData.TempDir = Join-Path $env:TEMP "ProcessReporterTests_$(Get-Random)"
-        if (-not (Test-Path $script:SharedData.TempDir)) {
-            New-Item -ItemType Directory -Path $script:SharedData.TempDir -Force | Out-Null
-        }
+        if (-not (Test-Path $script:SharedData.TempDir)) { New-Item -ItemType Directory -Path $script:SharedData.TempDir -Force | Out-Null }
         Write-Host "BeforeAll: Set script:SharedData.TempDir to '$($script:SharedData.TempDir)'"
     }
 
     AfterAll {
-        # Access the TempDir from the $script:SharedData hashtable
         if ($script:SharedData -and $script:SharedData.TempDir -and (Test-Path $script:SharedData.TempDir)) {
-            Write-Host "AfterAll: Removing TempDir '$($script:SharedData.TempDir)'"
             Remove-Item $script:SharedData.TempDir -Recurse -Force
         }
     }
@@ -53,14 +33,12 @@ Describe "Get-ProcessReport.ps1" -Tags 'ProcessReport' {
         $mockProcesses = $null # etc.
 
         BeforeEach {
-            # Access paths from $script:SharedData
-            $CurrentScriptPath = $script:SharedData.ScriptPathToTest # Note $script: prefix
-
+            $CurrentScriptPath = $script:SharedData.ScriptPathToTest # Still useful to have the path for other things if needed
             if (-not ($CurrentScriptPath -and (Test-Path $CurrentScriptPath -PathType Leaf))) {
                 throw "FATAL in BeforeEach (Core): ScriptPathToTest from script:SharedData is invalid: '$CurrentScriptPath'"
             }
 
-            # Mock data setup...
+            # Mock data setup (same as before)...
             $mockProcesses = @(
                 [PSCustomObject]@{ Id = 1001; ProcessName = 'powershell'; UserName = 'TESTDOMAIN\User1'; WorkingSet64 = 200MB; CPU = 120 },
                 [PSCustomObject]@{ Id = 1002; ProcessName = 'chrome'; UserName = 'TESTDOMAIN\User1'; WorkingSet64 = 500MB; CPU = 300 },
@@ -81,56 +59,85 @@ Describe "Get-ProcessReport.ps1" -Tags 'ProcessReport' {
             } -Force
             $mockWmiProcessDataForOwnerFallback = @( $mockSystemWmiProcessForOwnerObject )
 
-            Mock Get-Process { param($IncludeUserName) return $mockProcesses } -ModuleName $CurrentScriptPath -Verifiable
-            Mock Get-WmiObject -ModuleName $CurrentScriptPath -MockWith {
+            # REMOVE -ModuleName from Mocks
+            Mock Get-Process { param($IncludeUserName) return $mockProcesses } -Verifiable
+            Mock Get-WmiObject -MockWith {
                 param($Class, $Query)
+                # Write-Host "DEBUG MOCK Get-WmiObject: Class='$Class', Query='$Query'" # Uncomment for deep mock debug
                 if ($Class -eq 'Win32_PerfFormattedData_PerfProc_Process') { return $mockWmiPerfData }
                 if ($Query -match "Win32_Process WHERE ProcessId = 1005") { return $mockWmiProcessDataForOwnerFallback | Where-Object {$_.ProcessId -eq 1005} }
-                if ($Query -match "Win32_Process WHERE ProcessId") { return @() }
-                return @()
+                if ($Query -match "Win32_Process WHERE ProcessId") { return @() } # General catch
+                return @() # Default empty
             } -Verifiable
         }
 
         It "Generates CSV output to console by default" {
-            $PathToRun = $script:SharedData.ScriptPathToTest # Note $script: prefix
+            $PathToRun = $script:SharedData.ScriptPathToTest
+            # ... (debugging Write-Host and if checks as before) ...
             Write-Host "DEBUG CSV Test: PathToRun is '$PathToRun'"
             if (-not ($PathToRun -and (Test-Path $PathToRun -PathType Leaf))) { throw "Script not found in CSV Test! Path: '$PathToRun'" }
             
             $output = & $PathToRun -ErrorAction Stop
             $csvOutput = $output | ConvertFrom-Csv
             $csvOutput.Count | Should -Be ($mockProcesses.Count)
+            # ... other assertions
         }
 
-        # ... Ensure ALL other It blocks and BeforeEach/AfterEach that need ScriptPathToTest or TempDir
-        #     access them via $script:SharedData.ScriptPathToTest or $script:SharedData.TempDir
-        # Example:
         It "Saves CSV report to specified -OutputPath" {
             $PathToRun = $script:SharedData.ScriptPathToTest
             $CurrentTempDir = $script:SharedData.TempDir
-            # ...
+            # ... (debugging and test logic as in the previous good version for this 'It' block) ...
+            Write-Host "DEBUG (Save CSV Test): PathToRun is '$PathToRun'"; # etc.
+            if (-not ($PathToRun -and (Test-Path $PathToRun -PathType Leaf))) { throw "Script not found!" }
+            if (-not ($CurrentTempDir -and (Test-Path $CurrentTempDir -PathType Directory))) { throw "Temp dir not found!" }
             $testCsvPath = Join-Path $CurrentTempDir "test_processes.csv"
-            & $PathToRun -OutputPath $testCsvPath -ErrorAction Stop
-            # ...
+            Write-Host "DEBUG (Save CSV Test): Target CSV path is '$testCsvPath'"
+            $Error.Clear(); $scriptOutput = $null
+            Write-Host "DEBUG (Save CSV Test): Executing script: & '$PathToRun' -OutputPath '$testCsvPath' -Verbose"
+            try { $scriptOutput = & $PathToRun -OutputPath $testCsvPath -Verbose -ErrorAction Stop } catch { Write-Warning "Exception: $($_.Exception.ToString())" }
+            if ($Error.Count -gt 0) { $Error | ForEach-Object { Write-Warning $_.ToString() } }
+            $fileExists = Test-Path $testCsvPath -PathType Leaf
+            Write-Host "DEBUG (Save CSV Test): File exists result: $fileExists"
+            $fileExists | Should -Be $true
+            if ($fileExists) {
+                $fileContent = Get-Content $testCsvPath -ErrorAction SilentlyContinue
+                $fileContent.Length | Should -BeGreaterThan 0
+                if ($mockProcesses) {
+                    $csvFromFile = $fileContent | ConvertFrom-Csv
+                    $csvFromFile.Count | Should -Be ($mockProcesses.Count)
+                }
+            }
+        }
+        
+        # ... other 'It' blocks, ensuring -ModuleName is removed from their mocks if any ...
+
+        It "Verifies that mocks for Get-Process and Get-WmiObject were called" {
+            $PathToRun = $script:SharedData.ScriptPathToTest
+            & $PathToRun -ErrorAction SilentlyContinue
+            # REMOVE -ModuleName from Assert-MockCalled
+            Assert-MockCalled -CommandName Get-Process -Exactly 1 -Scope It
+            Assert-MockCalled -CommandName Get-WmiObject -Times 2 -Scope It # Adjust count as per script logic
         }
     }
 
     Context "Error Handling and Edge Cases" {
         BeforeEach {
-            $CurrentScriptPath = $script:SharedData.ScriptPathToTest # Note $script: prefix
+            $CurrentScriptPath = $script:SharedData.ScriptPathToTest
             if (-not ($CurrentScriptPath -and (Test-Path $CurrentScriptPath -PathType Leaf))) {
                 throw "FATAL in BeforeEach (Error Handling): ScriptPathToTest from script:SharedData is invalid: '$CurrentScriptPath'"
             }
+            # Any mocks specific to this context would also omit -ModuleName
         }
 
         It "Handles empty process list from Get-Process gracefully (warns and exits)" {
-            $PathToRun = $script:SharedData.ScriptPathToTest # Note $script: prefix
+            $PathToRun = $script:SharedData.ScriptPathToTest
+            # ... (debugging Write-Host and if checks as before) ...
             Write-Host "DEBUG (Empty List Test): PathToRun is '$PathToRun'"
-            if (-not ($PathToRun -and (Test-Path $PathToRun -PathType Leaf))) {
-                throw "FATAL (Empty List Test): Script to test is invalid or not found: '$PathToRun'"
-            }
+            if (-not ($PathToRun -and (Test-Path $PathToRun -PathType Leaf))) { throw "Script not found!" }
 
-            Mock Get-Process { @() } -ModuleName $PathToRun -Verifiable
-            Mock Get-WmiObject { @() } -ModuleName $PathToRun -Verifiable
+            # REMOVE -ModuleName from Mocks
+            Mock Get-Process { @() } -Verifiable
+            Mock Get-WmiObject { @() } -Verifiable
             
             $WarningResult = $null
             $ScriptBlock = {
@@ -140,5 +147,6 @@ Describe "Get-ProcessReport.ps1" -Tags 'ProcessReport' {
             Invoke-Command -ScriptBlock $ScriptBlock -WarningVariable WarningResult -ErrorVariable ErrorResult -ErrorAction SilentlyContinue
             $WarningResult.Message | Should -Match "No process information could be gathered"
         }
+        # ... other 'It' blocks, ensuring -ModuleName is removed from their mocks if any ...
     }
 }
