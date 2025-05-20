@@ -2,35 +2,44 @@
 
 Write-Host "DEBUG_TOP: PSScriptRoot is '$PSScriptRoot'"
 Write-Host "DEBUG_TOP: Current Directory is '$(Get-Location)'"
+# Define $ScriptPath in the script scope (this is default for top-level variables)
 $ScriptPath = Join-Path $PSScriptRoot "..\Get-MacProcessReport.ps1"
 Write-Host "DEBUG_TOP: Calculated ScriptPath is '$ScriptPath'"
 
 Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
 
-    $script:SharedData = $null # Will be initialized in BeforeAll
+    # $script:SharedData is correctly using $script: scope for shared data across blocks
+    $script:SharedData = $null
 
     BeforeAll {
-        Write-Host "DEBUG_BeforeAll: PSScriptRoot is '$PSScriptRoot'"
-        Write-Host "DEBUG_BeforeAll: ScriptPath (from top scope) is '$ScriptPath'"
+        # Explicitly try to access the $ScriptPath from the script scope
+        Write-Host "DEBUG_BeforeAll: Attempting to read \$script:ScriptPath: '$($script:ScriptPath)'"
+        Write-Host "DEBUG_BeforeAll: Attempting to read \$ScriptPath (local/parent): '$ScriptPath'"
+
 
         $script:SharedData = @{
             ScriptPathToTest = $null
             TempDir          = $null
         }
-        try {
-            # Ensure $ScriptPath is not empty before trying to resolve it
-            if ([string]::IsNullOrWhiteSpace($ScriptPath)) {
-                Write-Error "FATAL_BeforeAll: \$ScriptPath is null or empty before Resolve-Path. Value: '$ScriptPath'. PSScriptRoot was '$PSScriptRoot' at top."
-                throw "FATAL_BeforeAll: ScriptPath was null or empty."
-            }
-            Write-Host "DEBUG_BeforeAll: Attempting Resolve-Path for: '$ScriptPath'"
-            $script:SharedData.ScriptPathToTest = (Resolve-Path $ScriptPath -ErrorAction Stop).Path
-        } catch {
-            # Log the state of $ScriptPath if the try block fails
-            Write-Error "FATAL_BeforeAll: Could not resolve Mac script path '$ScriptPath' (this is \$ScriptPath from the outer scope). Error: $($_.Exception.Message)"
-            throw # Re-throw the original exception or a custom one
+
+        # Use the script-scoped variable explicitly here
+        # This is the most critical change
+        $ResolvedPathTarget = $script:ScriptPath # Use the version from the script scope
+
+        if ([string]::IsNullOrWhiteSpace($ResolvedPathTarget)) {
+            Write-Error "FATAL_BeforeAll: \$script:ScriptPath (or local \$ScriptPath) is null or empty before Resolve-Path. Value was '$ResolvedPathTarget'."
+            throw "FATAL_BeforeAll: ScriptPath was null or empty."
         }
 
+        try {
+            Write-Host "DEBUG_BeforeAll: Attempting Resolve-Path for: '$ResolvedPathTarget'"
+            $script:SharedData.ScriptPathToTest = (Resolve-Path $ResolvedPathTarget -ErrorAction Stop).Path
+        } catch {
+            Write-Error "FATAL_BeforeAll: Could not resolve Mac script path '$ResolvedPathTarget'. Error: $($_.Exception.Message)"
+            throw
+        }
+
+        # ... rest of BeforeAll ...
         if (-not (Test-Path $script:SharedData.ScriptPathToTest -PathType Leaf)) {
             Write-Error "FATAL_BeforeAll: Mac script to test not found at '$($script:SharedData.ScriptPathToTest)'"
             throw
@@ -53,18 +62,22 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
     }
 
     Context "Core Functionality with Mocks (macOS)" {
-        $mockPsOutput_Header = "USER               PID %CPU   RSS COMM" # Match actual ps header
+        $mockPsOutput_Header = "USER               PID %CPU   RSS COMM" 
         $mockPsOutput_Data = @(
             "root                 1  0.2 20480 launchd",
             "jdoe              1234  5.5 512000 SomeApp",
             "jdoe              5678 12.1 102400 pwsh",
             "_mdnsresponder   234  0.0  8192 mDNSResponder",
-            "anotheruser       901  0.8 30720 UserEventAgent" # Process with a different user
+            "anotheruser       901  0.8 30720 UserEventAgent" 
         )
         $mockPsOutput_Full = @($mockPsOutput_Header) + $mockPsOutput_Data
 
         BeforeEach {
-            $PathToRun = $script:SharedData.ScriptPathToTest # Used for invoking the script
+            # IMPORTANT: Ensure $script:SharedData.ScriptPathToTest is used here
+            $PathToRun = $script:SharedData.ScriptPathToTest 
+            if ([string]::IsNullOrWhiteSpace($PathToRun)) {
+                throw "FATAL_BeforeEach: \$script:SharedData.ScriptPathToTest is empty!"
+            }
             Mock ps {
                 param($ArgumentList)
                 Write-Verbose "Mock 'ps' called with args: $ArgumentList"
@@ -78,14 +91,12 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
             $csvOutput = $output | ConvertFrom-Csv
 
             $csvOutput.Count | Should -Be $mockPsOutput_Data.Count
-            $firstDataProc = $mockPsOutput_Data[1] 
-            $parsedFirstDataProc = $firstDataProc -match '^\s*(?<user>\S+)\s+(?<pid>\d+)\s+(?<cpu>[\d\.]+)\s+(?<rss>\d+)\s+(?<name>.+)$'
-            
-            $csvOutput[0].PID | Should -Be '5678'
+            # Corrected logic based on sorting by CPU (pwsh has 12.1 CPU)
+            $csvOutput[0].PID | Should -Be '5678' 
             $csvOutput[0].Name | Should -Be 'pwsh'
             $csvOutput[0].User | Should -Be 'jdoe'
             $csvOutput[0].CPU_Percent | Should -Be '12.1'
-            $csvOutput[0].Memory_MB | Should -Be ([math]::Round(102400 / 1024, 2)).ToString() 
+            $csvOutput[0].Memory_MB | Should -Be ([math]::Round(102400 / 1024, 2)).ToString()
         }
 
         It "Generates JSON output to console when -Format json is specified (macOS)" {
