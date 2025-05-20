@@ -39,12 +39,12 @@ jobs:
     # No default working-directory here
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4 # Updated to v4 for consistency
+      uses: actions/checkout@v4
 
     - name: Setup PowerShell Core (pwsh) on macOS
-      uses: actions/setup-powershell@v1 # v1 is current stable
+      uses: actions/setup-powershell@v1.3.0 # Using a specific v1.x.x tag for better reliability
       with:
-        version: 'latest' # Use 'latest' or a specific '7.x' version
+        version: 'latest' # Or a specific '7.x' version like '7.3'
 
     - name: Display PowerShell version (macOS)
       run: $PSVersionTable
