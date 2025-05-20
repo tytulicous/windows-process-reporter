@@ -1,22 +1,38 @@
 # macos/tests/Get-MacProcessReport.Tests.ps1
 
-$ScriptPath = Join-Path $PSScriptRoot "..\Get-MacProcessReport.ps1" # Path to the macOS script
+Write-Host "DEBUG_TOP: PSScriptRoot is '$PSScriptRoot'"
+Write-Host "DEBUG_TOP: Current Directory is '$(Get-Location)'"
+$ScriptPath = Join-Path $PSScriptRoot "..\Get-MacProcessReport.ps1"
+Write-Host "DEBUG_TOP: Calculated ScriptPath is '$ScriptPath'"
 
 Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
 
     $script:SharedData = $null # Will be initialized in BeforeAll
 
     BeforeAll {
+        Write-Host "DEBUG_BeforeAll: PSScriptRoot is '$PSScriptRoot'"
+        Write-Host "DEBUG_BeforeAll: ScriptPath (from top scope) is '$ScriptPath'"
+
         $script:SharedData = @{
             ScriptPathToTest = $null
             TempDir          = $null
         }
         try {
+            # Ensure $ScriptPath is not empty before trying to resolve it
+            if ([string]::IsNullOrWhiteSpace($ScriptPath)) {
+                Write-Error "FATAL_BeforeAll: \$ScriptPath is null or empty before Resolve-Path. Value: '$ScriptPath'. PSScriptRoot was '$PSScriptRoot' at top."
+                throw "FATAL_BeforeAll: ScriptPath was null or empty."
+            }
+            Write-Host "DEBUG_BeforeAll: Attempting Resolve-Path for: '$ScriptPath'"
             $script:SharedData.ScriptPathToTest = (Resolve-Path $ScriptPath -ErrorAction Stop).Path
-        } catch { Write-Error "FATAL: Could not resolve Mac script path '$ScriptPath'. Error: $($_.Exception.Message)"; throw }
+        } catch {
+            # Log the state of $ScriptPath if the try block fails
+            Write-Error "FATAL_BeforeAll: Could not resolve Mac script path '$ScriptPath' (this is \$ScriptPath from the outer scope). Error: $($_.Exception.Message)"
+            throw # Re-throw the original exception or a custom one
+        }
 
         if (-not (Test-Path $script:SharedData.ScriptPathToTest -PathType Leaf)) {
-            Write-Error "FATAL: Mac script to test not found at '$($script:SharedData.ScriptPathToTest)'"
+            Write-Error "FATAL_BeforeAll: Mac script to test not found at '$($script:SharedData.ScriptPathToTest)'"
             throw
         }
         Write-Host "BeforeAll (macOS): ScriptPathToTest = '$($script:SharedData.ScriptPathToTest)'"
@@ -28,6 +44,8 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
         Write-Host "BeforeAll (macOS): TempDir = '$($script:SharedData.TempDir)'"
     }
 
+    # ... rest of your tests ...
+    # (Your AfterAll and Context blocks remain the same)
     AfterAll {
         if ($script:SharedData -and $script:SharedData.TempDir -and (Test-Path $script:SharedData.TempDir -PathType Container)) {
             Remove-Item $script:SharedData.TempDir -Recurse -Force
@@ -47,15 +65,8 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
 
         BeforeEach {
             $PathToRun = $script:SharedData.ScriptPathToTest # Used for invoking the script
-            # Mock the 'ps' command.
-            # Since 'ps' is an external executable, Pester's 'Mock' command might not intercept it directly
-            # in all PowerShell versions or environments when called simply as 'ps'.
-            # A more robust way to mock external commands is to put them in the path or use an alias.
-            # For simplicity here, we assume 'Mock ps' works or that the script uses Invoke-Command/Start-Process.
-            # If Get-MacProcessReport.ps1 calls 'ps' directly, this basic Mock should work.
             Mock ps {
-                param($ArgumentList) # Capture arguments if needed for more complex mocks
-                # For this test, always return the same mock output
+                param($ArgumentList)
                 Write-Verbose "Mock 'ps' called with args: $ArgumentList"
                 return $mockPsOutput_Full
             } -Verifiable
@@ -67,15 +78,14 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
             $csvOutput = $output | ConvertFrom-Csv
 
             $csvOutput.Count | Should -Be $mockPsOutput_Data.Count
-            $firstDataProc = $mockPsOutput_Data[1] # jdoe 5678 (pwsh, highest CPU in mock after sort)
+            $firstDataProc = $mockPsOutput_Data[1] 
             $parsedFirstDataProc = $firstDataProc -match '^\s*(?<user>\S+)\s+(?<pid>\d+)\s+(?<cpu>[\d\.]+)\s+(?<rss>\d+)\s+(?<name>.+)$'
             
-            # Script sorts by CPU desc. 'pwsh' has 12.1
             $csvOutput[0].PID | Should -Be '5678'
             $csvOutput[0].Name | Should -Be 'pwsh'
             $csvOutput[0].User | Should -Be 'jdoe'
             $csvOutput[0].CPU_Percent | Should -Be '12.1'
-            $csvOutput[0].Memory_MB | Should -Be ([math]::Round(102400 / 1024, 2)).ToString() # 100.00
+            $csvOutput[0].Memory_MB | Should -Be ([math]::Round(102400 / 1024, 2)).ToString() 
         }
 
         It "Generates JSON output to console when -Format json is specified (macOS)" {
@@ -84,7 +94,7 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
             $jsonOutput = $output | ConvertFrom-Json
 
             $jsonOutput.Count | Should -Be $mockPsOutput_Data.Count
-            $jsonOutput[0].PID | Should -Be 5678 # pwsh
+            $jsonOutput[0].PID | Should -Be 5678 
             $jsonOutput[0].CPU_Percent | Should -Be 12.1
             $jsonOutput[0].Memory_MB | Should -Be ([math]::Round(102400 / 1024, 2))
         }
@@ -99,28 +109,22 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
             Test-Path $testCsvPath -PathType Leaf | Should -Be $true
             $fileContent = Get-Content $testCsvPath | ConvertFrom-Csv
             $fileContent.Count | Should -Be $mockPsOutput_Data.Count
-            $fileContent[0].PID | Should -Be '5678' # pwsh
+            $fileContent[0].PID | Should -Be '5678'
         }
         
         It "Handles empty or minimal 'ps' output (macOS)" {
             $PathToRun = $script:SharedData.ScriptPathToTest
-            Mock ps { return @($mockPsOutput_Header) } # Only header, no data
+            Mock ps { return @($mockPsOutput_Header) } 
             
             $WarningOutput = Invoke-Command {
                 $WarningPreference = 'Continue'
                 & $PathToRun -ErrorAction SilentlyContinue
             } -WarningVariable ScriptWarnings -ErrorAction SilentlyContinue
 
-            # Script should produce an empty report or a warning
             $ScriptWarnings.Message | Should -Match "No process data could be parsed successfully."
-            # Or, if it outputs an empty CSV/JSON, check that
-            # $output = & $PathToRun; $output.Length | Should -BeLessThan 2 # e.g. only header for CSV
         }
 
         It "Correctly parses various process lines (macOS)" {
-            # This test focuses on the parsing logic within the script for different ps lines
-            # For this, we might not call the full script, but invoke its parsing part, or rely on full runs.
-            # Here, we'll check one of the mock lines through a full run.
             $PathToRun = $script:SharedData.ScriptPathToTest
             $output = & $PathToRun -Format json -ErrorAction Stop
             $jsonOutput = $output | ConvertFrom-Json
@@ -130,13 +134,13 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
             $targetProc.Name | Should -Be 'launchd'
             $targetProc.User | Should -Be 'root'
             $targetProc.CPU_Percent | Should -Be 0.2
-            $targetProc.Memory_MB | Should -Be ([math]::Round(20480 / 1024, 2)) # 20.00
+            $targetProc.Memory_MB | Should -Be ([math]::Round(20480 / 1024, 2)) 
         }
 
         It "Verifies that mock for 'ps' command was called (macOS)" {
             $PathToRun = $script:SharedData.ScriptPathToTest
             & $PathToRun -ErrorAction SilentlyContinue
-            Assert-MockCalled -CommandName ps -Exactly 1 -Scope It # ps should be called once
+            Assert-MockCalled -CommandName ps -Exactly 1 -Scope It 
         }
     }
 }
