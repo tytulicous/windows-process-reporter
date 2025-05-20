@@ -33,37 +33,36 @@ jobs:
       run: Invoke-Pester -Path ./tests -PassThru # ./tests is now relative to ./scripts/windows
       shell: pwsh
 
-  test-macos:
-    name: Test on macOS
-    runs-on: macos-latest
-    # No default working-directory here
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+test-macos:
+  name: Test on macOS
+  runs-on: macos-latest
+  steps:
+  - name: Checkout code
+    uses: actions/checkout@v4
 
-    - name: Setup PowerShell Core (pwsh) on macOS
-      uses: actions/setup-powershell@v1.3.0 # Using a specific v1.x.x tag for better reliability
-      with:
-        version: 'latest' # Or a specific '7.x' version like '7.3'
+  - name: Setup PowerShell Core (pwsh) on macOS
+    # Using the commit SHA for v1.3.0
+    uses: actions/setup-powershell@33295269b998013c698091235a35b922757e1554
+    with:
+      version: 'latest'
 
-    - name: Display PowerShell version (macOS)
-      run: $PSVersionTable
-      shell: pwsh # Use pwsh shell directly
+  - name: Display PowerShell version (macOS)
+    run: $PSVersionTable
+    shell: pwsh
 
-    - name: Install Pester module (macOS)
-      shell: pwsh # Use pwsh shell directly
-      run: |
-        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-        Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser -Confirm:$false
-        Import-Module Pester -ErrorAction SilentlyContinue
+  - name: Install Pester module (macOS)
+    shell: pwsh
+    run: |
+      Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+      Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser -Confirm:$false
+      Import-Module Pester -ErrorAction SilentlyContinue
 
-    - name: Display Pester version (macOS)
-      run: (Get-Module Pester -ListAvailable | Select-Object -First 1).Version.ToString()
-      shell: pwsh # Use pwsh shell directly
-      continue-on-error: true
+  - name: Display Pester version (macOS)
+    run: (Get-Module Pester -ListAvailable | Select-Object -First 1).Version.ToString()
+    shell: pwsh
+    continue-on-error: true
 
-    - name: Run Pester Tests (macOS)
-      # Set the working directory specifically for this step
-      working-directory: ./scripts/macos
-      run: Invoke-Pester -Path ./tests -PassThru # ./tests is now relative to ./scripts/macos
-      shell: pwsh # Use pwsh shell for consistency with Invoke-Pester
+  - name: Run Pester Tests (macOS)
+    working-directory: ./scripts/macos
+    run: Invoke-Pester -Path ./tests -PassThru
+    shell: pwsh
