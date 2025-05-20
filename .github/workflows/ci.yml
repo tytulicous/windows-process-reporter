@@ -2,65 +2,68 @@ name: Process Reporter CI
 
 on:
   push:
-    branches: [ main, master, develop ] # Adjusted branches
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, master, develop ] # Adjusted branches
+    branches: [ main, master, develop ]
 
 jobs:
   test-windows:
     name: Test on Windows
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: ./windows
+    # No default working-directory here, as not all steps need it.
+    # The default working directory for steps will be the root of the checkout (${{ github.workspace }}).
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
     - name: Set Windows Execution Policy
       run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
       shell: pwsh
+
     - name: Install Pester (Windows)
       run: |
         Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
         Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser -Confirm:$false
         Import-Module Pester -ErrorAction SilentlyContinue
       shell: pwsh
+
     - name: Run Pester Tests (Windows)
-      run: Invoke-Pester -Path ./tests -PassThru
+      # Set the working directory specifically for this step
+      working-directory: ./scripts/windows
+      run: Invoke-Pester -Path ./tests -PassThru # ./tests is now relative to ./scripts/windows
       shell: pwsh
 
-  # --- ADD THE NEW MACOS JOB HERE ---
   test-macos:
     name: Test on macOS
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: ./macos
+    # No default working-directory here
     steps:
     - name: Checkout code
-      uses: actions/checkout@v1.3.0
+      uses: actions/checkout@v4 # Updated to v4 for consistency
 
     - name: Setup PowerShell Core (pwsh) on macOS
-      uses: actions/setup-powershell@v1
+      uses: actions/setup-powershell@v1 # v1 is current stable
       with:
-        version: '7.x'
+        version: 'latest' # Use 'latest' or a specific '7.x' version
 
     - name: Display PowerShell version (macOS)
-      run: pwsh -Command "$PSVersionTable"
-      shell: bash
+      run: $PSVersionTable
+      shell: pwsh # Use pwsh shell directly
 
     - name: Install Pester module (macOS)
+      shell: pwsh # Use pwsh shell directly
       run: |
-        pwsh -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted"
-        pwsh -Command "Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser -Confirm:$false"
-        pwsh -Command "Import-Module Pester -ErrorAction SilentlyContinue"
-      shell: bash
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+        Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser -Confirm:$false
+        Import-Module Pester -ErrorAction SilentlyContinue
 
     - name: Display Pester version (macOS)
-      run: pwsh -Command "(Get-Module Pester -ListAvailable | Select-Object -First 1).Version.ToString()"
-      shell: bash
+      run: (Get-Module Pester -ListAvailable | Select-Object -First 1).Version.ToString()
+      shell: pwsh # Use pwsh shell directly
       continue-on-error: true
 
     - name: Run Pester Tests (macOS)
-      run: pwsh -Command "Invoke-Pester -Path ./tests -PassThru"
-      shell: bash
+      # Set the working directory specifically for this step
+      working-directory: ./scripts/macos
+      run: Invoke-Pester -Path ./tests -PassThru # ./tests is now relative to ./scripts/macos
+      shell: pwsh # Use pwsh shell for consistency with Invoke-Pester
