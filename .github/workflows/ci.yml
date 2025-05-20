@@ -36,33 +36,36 @@ jobs:
   test-macos:
     name: Test on macOS
     runs-on: macos-latest
-    steps: # Each step below must be indented correctly under 'steps:'
-      - name: Checkout code # Corrected: space after hyphen, and proper indentation
+    steps:
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup PowerShell Core (pwsh) on macOS # Corrected: proper indentation
-        # Using the commit SHA for v1.3.0
-        uses: actions/setup-powershell@33295269b998013c698091235a35b922757e1554
-        with:
-          version: 'latest'
+      # --- STEP TO REMOVE OR COMMENT OUT ---
+      # - name: Setup PowerShell Core (pwsh) on macOS
+      #   uses: actions/setup-powershell@33295269b998013c698091235a35b922757e1554
+      #   with:
+      #     version: 'latest'
+      # --------------------------------------
 
-      - name: Display PowerShell version (macOS) # Corrected: proper indentation
-        run: $PSVersionTable
-        shell: pwsh
+      - name: Display Pre-installed PowerShell version (macOS)
+        run: $PSVersionTable # This will show details of the pwsh found in PATH
+        shell: pwsh # This relies on pwsh being in the PATH already
 
-      - name: Install Pester module (macOS) # Corrected: proper indentation
+      - name: Install Pester module (macOS)
         shell: pwsh
         run: |
+          Write-Host "Attempting to install Pester using the system's PowerShell."
+          Get-Command pwsh | Select-Object -ExpandProperty Source # See which pwsh is being used
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
           Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser -Confirm:$false
           Import-Module Pester -ErrorAction SilentlyContinue
 
-      - name: Display Pester version (macOS) # Corrected: proper indentation
+      - name: Display Pester version (macOS)
         run: (Get-Module Pester -ListAvailable | Select-Object -First 1).Version.ToString()
         shell: pwsh
         continue-on-error: true
 
-      - name: Run Pester Tests (macOS) # Corrected: proper indentation
+      - name: Run Pester Tests (macOS)
         working-directory: ./scripts/macos
         run: Invoke-Pester -Path ./tests -PassThru
         shell: pwsh
