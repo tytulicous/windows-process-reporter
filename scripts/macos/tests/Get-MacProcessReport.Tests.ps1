@@ -2,33 +2,56 @@
 
 Write-Host "DEBUG_TOP: PSScriptRoot is '$PSScriptRoot'"
 Write-Host "DEBUG_TOP: Current Directory is '$(Get-Location)'"
-# Define $ScriptPath in the script scope (this is default for top-level variables)
-$ScriptPath = Join-Path $PSScriptRoot "..\Get-MacProcessReport.ps1"
-Write-Host "DEBUG_TOP: Calculated ScriptPath is '$ScriptPath'"
+# Define $ScriptPath in the script scope
+$script:ScriptPath = Join-Path $PSScriptRoot "..\Get-MacProcessReport.ps1" # Explicitly use $script: here too for consistency
+Write-Host "DEBUG_TOP: \$script:ScriptPath is SET TO: '$($script:ScriptPath)'" # Verify it's set
 
 Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
 
-    # $script:SharedData is correctly using $script: scope for shared data across blocks
     $script:SharedData = $null
 
     BeforeAll {
-        # Explicitly try to access the $ScriptPath from the script scope
-        Write-Host "DEBUG_BeforeAll: Attempting to read \$script:ScriptPath: '$($script:ScriptPath)'"
-        Write-Host "DEBUG_BeforeAll: Attempting to read \$ScriptPath (local/parent): '$ScriptPath'"
+        Write-Host "DEBUG_BeforeAll: --- START BeforeAll ---"
+        Write-Host "DEBUG_BeforeAll: Value of \$PSScriptRoot inside BeforeAll is: '$PSScriptRoot'" # Check this!
 
+        # Test 1: Direct read of $script:ScriptPath
+        Write-Host "DEBUG_BeforeAll: Direct read of \$script:ScriptPath: '$($script:ScriptPath)'"
+
+        # Test 2: Get all script-scoped variables and see if ScriptPath is there
+        Write-Host "DEBUG_BeforeAll: Listing script-scoped variables like 'ScriptPath':"
+        Get-Variable -Scope Script | Where-Object Name -like '*ScriptPath*' | Format-Table Name, Value -AutoSize | Out-String | Write-Host
+
+        # Test 3: Re-calculate path INSIDE BeforeAll using ITS PSScriptRoot (if available)
+        $PathInBeforeAll = $null
+        if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+            $PathInBeforeAll = Join-Path $PSScriptRoot "..\Get-MacProcessReport.ps1"
+            Write-Host "DEBUG_BeforeAll: Path calculated inside BeforeAll using its \$PSScriptRoot: '$PathInBeforeAll'"
+        } else {
+            Write-Host "DEBUG_BeforeAll: \$PSScriptRoot is EMPTY inside BeforeAll, cannot recalculate path this way."
+        }
 
         $script:SharedData = @{
             ScriptPathToTest = $null
             TempDir          = $null
         }
 
-        # Use the script-scoped variable explicitly here
-        # This is the most critical change
-        $ResolvedPathTarget = $script:ScriptPath # Use the version from the script scope
+        # Decision point: Which path to use?
+        $ResolvedPathTarget = $null
+        if (-not [string]::IsNullOrWhiteSpace($script:ScriptPath)) {
+            $ResolvedPathTarget = $script:ScriptPath
+            Write-Host "DEBUG_BeforeAll: Using \$script:ScriptPath ('$ResolvedPathTarget') for Resolve-Path."
+        } elseif ($PathInBeforeAll -and (-not [string]::IsNullOrWhiteSpace($PathInBeforeAll))) {
+            $ResolvedPathTarget = $PathInBeforeAll
+            Write-Host "DEBUG_BeforeAll: \$script:ScriptPath was empty, falling back to path calculated inside BeforeAll ('$ResolvedPathTarget')."
+        } else {
+            Write-Error "FATAL_BeforeAll: Both \$script:ScriptPath AND path re-calculated in BeforeAll are empty/null. Cannot proceed."
+            throw "FATAL_BeforeAll: Critical path variable is missing."
+        }
 
+        # This is the line that previously failed (around original line 30)
         if ([string]::IsNullOrWhiteSpace($ResolvedPathTarget)) {
-            Write-Error "FATAL_BeforeAll: \$script:ScriptPath (or local \$ScriptPath) is null or empty before Resolve-Path. Value was '$ResolvedPathTarget'."
-            throw "FATAL_BeforeAll: ScriptPath was null or empty."
+            Write-Error "FATAL_BeforeAll: \$ResolvedPathTarget is still null or empty before Resolve-Path. This should not happen based on above logic. Value was '$ResolvedPathTarget'."
+            throw "FATAL_BeforeAll: ResolvedPathTarget was null or empty."
         }
 
         try {
@@ -39,7 +62,7 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
             throw
         }
 
-        # ... rest of BeforeAll ...
+        # ... rest of BeforeAll (unchanged from your last version) ...
         if (-not (Test-Path $script:SharedData.ScriptPathToTest -PathType Leaf)) {
             Write-Error "FATAL_BeforeAll: Mac script to test not found at '$($script:SharedData.ScriptPathToTest)'"
             throw
@@ -51,10 +74,10 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
             New-Item -ItemType Directory -Path $script:SharedData.TempDir -Force -ErrorAction Stop | Out-Null
         }
         Write-Host "BeforeAll (macOS): TempDir = '$($script:SharedData.TempDir)'"
+        Write-Host "DEBUG_BeforeAll: --- END BeforeAll ---"
     }
 
-    # ... rest of your tests ...
-    # (Your AfterAll and Context blocks remain the same)
+    # ... (AfterAll and Context blocks remain the same as your last fully posted version)
     AfterAll {
         if ($script:SharedData -and $script:SharedData.TempDir -and (Test-Path $script:SharedData.TempDir -PathType Container)) {
             Remove-Item $script:SharedData.TempDir -Recurse -Force
@@ -73,7 +96,6 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
         $mockPsOutput_Full = @($mockPsOutput_Header) + $mockPsOutput_Data
 
         BeforeEach {
-            # IMPORTANT: Ensure $script:SharedData.ScriptPathToTest is used here
             $PathToRun = $script:SharedData.ScriptPathToTest 
             if ([string]::IsNullOrWhiteSpace($PathToRun)) {
                 throw "FATAL_BeforeEach: \$script:SharedData.ScriptPathToTest is empty!"
@@ -85,13 +107,13 @@ Describe "Get-MacProcessReport.ps1 (macOS)" -Tags 'ProcessReport', 'macOS' {
             } -Verifiable
         }
 
+        # ... All 'It' blocks remain the same
         It "Generates CSV output to console by default (macOS)" {
             $PathToRun = $script:SharedData.ScriptPathToTest
             $output = & $PathToRun -ErrorAction Stop
             $csvOutput = $output | ConvertFrom-Csv
 
             $csvOutput.Count | Should -Be $mockPsOutput_Data.Count
-            # Corrected logic based on sorting by CPU (pwsh has 12.1 CPU)
             $csvOutput[0].PID | Should -Be '5678' 
             $csvOutput[0].Name | Should -Be 'pwsh'
             $csvOutput[0].User | Should -Be 'jdoe'
